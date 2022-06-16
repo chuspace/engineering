@@ -1,6 +1,6 @@
-# Chuspace Engineering blog
+# Chuspace Engineering blog 
 
-All tech related stuff here - infrastructure, deployment, Rails, Ruby and so on...
+All tech related stuff here - infrastructure, deployment, Rails, Ruby and so on... 🛠
 
 Chuspace is built on the popular Ruby on Rails framework and is by design a monolith:
 
