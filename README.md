@@ -1,4 +1,4 @@
-# Chuspace Engineering blog 
+# Chuspace Engineering Blog
 
 All tech related stuff here - infrastructure, deployment, Rails, Ruby and so on... 🛠
 
