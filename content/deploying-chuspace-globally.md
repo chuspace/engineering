@@ -99,15 +99,12 @@ In the event of load, more resources can be provisioned using terraform by incre
 
 Most steps are manually run, but it's simple and good enough. I think I will convert this setup into a deployment tool in the future, but I don't have time now.
 
-
 ### Inspirations and Credits
 
-[Hashicorp tutorial](https://www.hashicorp.com/blog/terraform-feature-toggles-blue-green-deployments-canary-test)
+\[Hashicorp tutorial\](https://www.hashicorp.com/blog/terraform-feature-toggles-blue-green-deployments-canary-test)
+
 [Terraform](https://www.terraform.io/)
+
 [Packer](https://www.packer.io/)
+
 [Tomo](https://github.com/mattbrictson/tomo)
-
-
-
-
-
