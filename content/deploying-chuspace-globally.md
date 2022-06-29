@@ -9,7 +9,7 @@ App deployment is a hard problem but deploying globally, and close to the reader
 
 Chuspace is a simple Rails app powered by a MySQL database and Memcached running on each node. MySQL database is managed and provided by [PlanetScale](https://planetscale.com/) with replicas spread across the globe. There is no database migration involved during deployment and ActiveJob is powered by Amazon SQS so all quite simple.
 
-## Easy way
+## The lazy way
 
 I searched for opensource [PAAS](https://github.com/search?o=desc&q=paas&s=updated&type=Repositories) options on Github and came across [Convox](https://convox.com/). Convox rack v3 is based on [Kubernetes](https://kubernetes.io/) and is available on AWS, DigitalOcean, Google Cloud, and Azure. Also, they don't charge you based on how many clusters you can add but instead on deployment workflows. You can create upto two workflows in the free plan. I had to do some firefighting to setup SSL and DNS, but otherwise, everything worked perfectly on Convox. I had a multi-region/cloud K8s cluster setup in the following regions: EU, Asia, and the America. DNS and Application load balancing was provided by [Cloudflare](https://www.cloudflare.com/en-gb/load-balancing/) using Geo-Steering.
 
@@ -17,7 +17,7 @@ I was happy for the day, but when I looked at monthly costs, it was outrageous -
 
 I looked into Nomad + Waypoint, which seemed like a good option for edge deployments until it wasn't that easy to setup for production workloads. I didn't want to spend too much time doing DevOps.
 
-## Hard way
+## The hard way
 
 After some research, I settled on Terraform for infrastructure management and good'ol SSH for deployments using a gem called [Tomo](https://github.com/mattbrictson/tomo). I think, Terraform is the best thing happened to infrastructure management. Otherwise, it would have been a nightmare to provision and manage all the resources on gigantic cloud platforms like AWS or GCP.
 
