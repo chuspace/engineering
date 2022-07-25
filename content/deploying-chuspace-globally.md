@@ -1,103 +1,118 @@
 ---
-title: Deploying Chuspace Globally
+title: Deploying Chuspace globally using Docker
 summary: Outlining thought process for deploying simple Rails app globally
 date: 27-06-2022
 topics: Rails, AWS, Digitalocean, Deployment
 ---
 
-App deployment is a hard problem but deploying globally, and close to the reader is even harder.
+Rails app deployment is a hard problem but deploying globally, and close to the reader is even harder. In this edition, we use [Docker](https://www.docker.com/) instead of machine images for Rails application deployment.
 
-Chuspace is a simple Rails app powered by a MySQL database and Memcached running on each node. MySQL database is managed and provided by [PlanetScale](https://planetscale.com/) with replicas spread across the globe. There is no database migration involved during deployment and ActiveJob is powered by Amazon SQS so all quite simple.
+\*\*\*A bit of a recap, \*\*\*Chuspace is a simple Rails app powered by a MySQL database and Memcached running on each node. MySQL database is managed and provided by [PlanetScale](https://planetscale.com/) with replicas spread across the globe. The previous version used Terraform with Packer to build and deploy pre-built machine images.
 
-## The lazy way
+Issues with [previous](/engineering/deploying-chuspace-globally/editions/1) version:
 
-I searched for opensource [PAAS](https://github.com/search?o=desc&q=paas&s=updated&type=Repositories) options on Github and came across [Convox](https://convox.com/). Convox rack v3 is based on [Kubernetes](https://kubernetes.io/) and is available on AWS, DigitalOcean, Google Cloud, and Azure. Also, they don't charge you based on how many clusters you can add but instead on deployment workflows. You can create upto two workflows in the free plan. I had to do some firefighting to setup SSL and DNS, but otherwise, everything worked perfectly on Convox. I had a multi-region/cloud K8s cluster setup in the following regions: EU, Asia, and the America. DNS and Application load balancing was provided by [Cloudflare](https://www.cloudflare.com/en-gb/load-balancing/) using Geo-Steering.
+1. Complex - building and tracking multi-provider/region machine images on each deploy was slow and complicated. I had to manually copy new images to each region and build seperately for each cloud provider. Autoscaling was hard.
 
-I was happy for the day, but when I looked at monthly costs, it was outrageous - on AWS it was $180 per month per region. On the digital ocean, it was around $72 per region. For an early stage startup this wasn't sustainable. I also looked at Qovery and came upon the same issue.
+2. Deploy downtime (up to 10 mins)
 
-I looked into Nomad + Waypoint, which seemed like a good option for edge deployments until it wasn't that easy to setup for production workloads. I didn't want to spend too much time doing DevOps.
+## Docker way
 
-## The hard way
+I avoided docker to keep things simple and low overhead however it made the deployment process very complex, mainly managing VM images on multiple providers.
 
-After some research, I settled on Terraform for infrastructure management and good'ol SSH for deployments using a gem called [Tomo](https://github.com/mattbrictson/tomo). I think, Terraform is the best thing happened to infrastructure management. Otherwise, it would have been a nightmare to provision and manage all the resources on gigantic cloud platforms like AWS or GCP.
+[Docker](https://www.docker.com/) solves the application portability problem by turning an application code into a deployable artifact that can be run on any supported platform.
 
-As of now, I have a Terraform module that provisions instances on-demand on a cloud provider with a base image preconfigured with monitoring tools and app code deployed using [Tomo](https://github.com/mattbrictson/tomo) and built using [Packer](https://www.packer.io/)
+**How this new flow works?**
 
-The top-level terraform module looks like this, which works at the provider level:
+There is still Terraform in the picture because it’s just great for managing multiple infrastructure resources. [Github CI](https://github.com/features/actions) uses terraform to spin new VMs on each code deploy with a pre-configured user data that installs [Docker](https://www.docker.com/) and runs the application using docker-compose. There is also a systemd file that restarts Docker containers in case of machine restarts.
 
-```hcl
-module "aws_apac" {
-  source = "./aws/apac"
-  # ... options
-}
+The terraform module looks like this,
 
-module "do_us" {
-  source = "./do/us"
-  # ... options
-}
+```tf
+##############################################
+# Provider: AWS
+# Region: EU
+##############################################
 
-module "gcp_canada" {
-  source = "./gcp/canada"
-  # ... options
-}
-```
-
-And the submodules are resource-specific, which looks like this:
-
-```hcl
-module "eu_west_servers" {
-  source = "../shared/server"
-
+module "aws_eu_west" {
+  source = "./aws"
   region = "eu-west-1"
-  name   = "hello-world"
 
-  # VPC etc...
-
-  instance_type        = "t3.small"
-  instance_count       = var.instance_count
+  server_count              = 2
+  logtail_token             = var.logtail_token
+  aws_access_key_id         = var.aws_access_key_id
+  aws_secret_access_key     = var.aws_secret_access_key
+  aws_region                = "eu-west-1"
+  aws_ssm_secret_key_name   = "eu-foobar"
 }
-```
 
-```hcl
-module "us_sfo_servers" {
-  source = "../server"
+##############################################
+# Provider: DO
+# Region: US
+##############################################
 
+module "do_us_west" {
+  source = "./do"
   region = "sfo3"
-  name   = "hello-world"
 
-  do_token             = var.do_token
-  instance_type        = "s-1vcpu-2gb-intel"
-  instance_count       = var.instance_count
+  server_count              = 2
+  do_token                  = var.do_token
+  logtail_token             = var.logtail_token
+  docker_access_token       = var.docker_access_token
+  aws_access_key_id         = var.aws_access_key_id
+  aws_secret_access_key     = var.aws_secret_access_key
+  aws_region                = "eu-west-1"
+  aws_ssm_secret_key_name   = "us-foobar"
 }
 ```
 
-```hcl
-resource "aws_instance" "app" {
-  # ...
+Each new replacement VM is created first then destroyed to reduce downtime,
 
-  lifecycle {
+```tf
+ lifecycle {
     create_before_destroy = true
   }
-}
 ```
 
-For deployment, [Tomo](https://github.com/mattbrictson/tomo) reads Public IP addresses from Terraform output and then deploys code to the currently running instances in seconds:
+Application environment variables are managed via [AWS secrets manager](https://aws.amazon.com/secrets-manager/) as you may have noticed above and is injected on demand before running the docker containers,
 
-```rb
-environment :eu_central do
-  host "instance1@1.2.3.4"
-  host "instance2@1.2.3.5"
-end
-
-environment :ap_south do
-  host "instance1@1.2.3.4"
-  host "instance2@1.2.3.5"
-end
+```bash
+(aws secretsmanager get-secret-value --secret-id example-app/some-env/${aws_ssm_secret_key_name} | jq '.SecretString' | xargs printf) > .env
 ```
 
-In the event of load, more resources can be provisioned using terraform by increasing the instance count and if needed latest code can be deployed using Tomo. Since the base image always includes one deployment, subsequent deploys are very quick - all it needs is the latest code. Whenever Ruby version is updated, I create a new base image using packer and then run the deploy setup using Tomo so that if I have to scale up servers it's quick.
+The logs are aggregated using [Logtail](https://betterstack.com/logtail) from multiple running containers,
 
-Most steps are manually run, but it's simple and good enough. I think I will convert this setup into a deployment tool in the future, but I don't have time now.
+```bash
+curl -1sLf \
+  'https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh' \
+  | sudo -E bash
+
+sudo apt-get install -y  vector=0.22.3-1
+sudo wget -O /etc/vector/vector.toml https://logtail.com/vector-toml/docker/${logtail_token}
+sudo usermod -a -G docker vector
+sudo systemctl restart vector
+```
+
+Monitoring is done using Weave [scope](https://www.weave.works/oss/scope/), which also has a nice UI for exec’*ing* into containers when needed, for example, to run rails console.
+
+![Weave scope UI](/assets/screenshot-2022-07-25-at-214321.png)
+
+Cloudflare manages the incoming traffic using a network load balancer, which routes traffic based on proximity. If a pool becomes unhealthy during deploys, all traffic gets re-routed to the primary region. Primary region is deployed last.
+
+The deployment happens in two steps using Github CI and rake tasks - step one to all regions except the primary and then to primary. I think there is room for improvement here but I haven’t come up with anything solid yet. Docker makes the deployment process simple and easy to reason with. However, there is still some serious downtime during deploys - ***30 seconds***. I can mitigate that by keeping the old resources around a bit longer and then swapping the traffic using the application load balancer as described in Terraform blue-green deployment tutorial.
+
+## In-between thoughts
+
+**Should I use docker swarm?**
+
+Maybe? But I have few unique env variables per region so not sure how that would work in swarm mode.
+
+**Should I use hashicorp Nomad?**
+
+Maybe? But for production deploys it requires few components like [Consul](https://www.consul.io/), [Vault](https://www.vaultproject.io/) and I don’t want to learn all that now.
+
+Not sure how per region env variable would work here either.
+
+---
 
 ## Inspirations and Credits
 
@@ -105,6 +120,8 @@ Most steps are manually run, but it's simple and good enough. I think I will con
 
 [Terraform](https://www.terraform.io/)
 
-[Packer](https://www.packer.io/)
+[Docker](https://www.docker.com/)
 
-[Tomo](https://github.com/mattbrictson/tomo)
+[Weave cloud scope](https://www.weave.works/oss/scope/)
+
+[Logtail](https://betterstack.com/logtail)
