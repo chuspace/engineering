@@ -7,7 +7,9 @@ topics: Rails, AWS, Digitalocean, Deployment
 
 Rails app deployment is a hard problem but deploying globally, and close to the reader is even harder. In this edition, we use [Docker](https://www.docker.com/) instead of machine images for Rails application deployment.
 
-\*\*\*A bit of a recap, \*\*\*Chuspace is a simple Rails app powered by a MySQL database and Memcached running on each node. MySQL database is managed and provided by [PlanetScale](https://planetscale.com/) with replicas spread across the globe. The previous version used Terraform with Packer to build and deploy pre-built machine images.
+*A bit of a recap*, 
+
+Chuspace is a simple Rails app powered by a MySQL database and Memcached running on each node. MySQL database is managed and provided by [PlanetScale](https://planetscale.com/) with replicas spread across the globe. The previous version used Terraform with Packer to build and deploy pre-built machine images.
 
 Issues with [previous](/engineering/deploying-chuspace-globally/editions/1) version:
 
