@@ -7,7 +7,7 @@ topics: Rails, AWS, Digitalocean, Deployment
 
 Rails app deployment is a hard problem but deploying globally, and close to the reader is even harder. In this edition, we use [Docker](https://www.docker.com/) instead of machine images for Rails application deployment.
 
-*A bit of a recap*, 
+*A bit of a recap*,
 
 Chuspace is a simple Rails app powered by a MySQL database and Memcached running on each node. MySQL database is managed and provided by [PlanetScale](https://planetscale.com/) with replicas spread across the globe. The previous version used Terraform with Packer to build and deploy pre-built machine images.
 
@@ -99,6 +99,8 @@ Monitoring is done using Weave [scope](https://www.weave.works/oss/scope/), whi
 ![Weave scope UI](/assets/screenshot-2022-07-25-at-214321.png)
 
 Cloudflare manages the incoming traffic using a network load balancer, which routes traffic based on proximity. If a pool becomes unhealthy during deploys, all traffic gets re-routed to the primary region. Primary region is deployed last.
+
+![Cloudflare load balancer pools](/assets/screenshot-2022-07-28-at-161835.png)
 
 The deployment happens in two steps using Github CI and rake tasks - step one to all regions except the primary and then to primary. I think there is room for improvement here but I haven’t come up with anything solid yet. Docker makes the deployment process simple and easy to reason with. However, there is still some serious downtime during deploys - ***30 seconds***. I can mitigate that by keeping the old resources around a bit longer and then swapping the traffic using the application load balancer as described in Terraform blue-green deployment tutorial.
 
